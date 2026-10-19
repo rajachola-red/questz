@@ -27,7 +27,7 @@ async function top(k) {
   return ids.map((id, i) => ({ n: names?.[id] || 'Anon', s: a[i * 2 + 1] }));
 }
 
-async function h(req) {
+async function run(req) {
   const u = new URL(req.url), d = u.searchParams.get('do');
   if (d === 'board') return J({ all: await top('lb'), wk: await top('wk:' + W()) });
 
@@ -78,6 +78,10 @@ async function h(req) {
     return new Response(f.stream, { headers: { 'content-type': f.blob.contentType, 'cache-control': 'private, max-age=3600' } });
   }
   return J({ error: 'Bad request' }, 400);
+}
+
+async function h(req) {
+  try { return await run(req); } catch (e) { return J({ error: 'Server error: ' + e.message }, 500); }
 }
 
 export const GET = h, POST = h;
