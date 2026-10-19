@@ -2,27 +2,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Edge Sidequest Generator</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 body{font:18px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;background:#fff;color:#000;margin:0;padding:2rem 1rem;text-align:center;letter-spacing:.05em}
 h1{text-transform:uppercase;letter-spacing:.3em;font-size:1.2rem}
-main{max-width:640px;margin:15vh auto 0}
-button{font:inherit;background:none;border:1px solid #000;padding:.6em 1.2em;margin:.3em;cursor:pointer;text-transform:uppercase}
+main{max-width:640px;margin:10vh auto 0}
+button{font:inherit;background:none;border:1px solid #000;padding:.6em 1.2em;margin:.3em;cursor:pointer;text-transform:uppercase;color:#000}
 button:hover{background:#000;color:#fff}
 hr{margin:3rem 0 2rem;border:0;border-top:1px solid #000}
+section{margin-top:4rem}
+#lb{white-space:pre-line}
+summary{cursor:pointer;text-transform:uppercase;margin-top:3rem}
+a{color:#000}
+input{font:inherit;max-width:100%}
 #c{position:fixed;inset:0;pointer-events:none}
 </style>
 <h1>Edge Sidequest Generator</h1>
+<p id="g" hidden>Playing as guest. <a id="tl" href="#">Open in Telegram</a> to save your progress and join the leaderboard.</p>
 <main>
   <h2>Find your mission</h2>
   <p id="q"></p>
   <div id="a" style="visibility:hidden"><button id="y">I accept</button><button id="n">Hit me again</button></div>
-  <section id="m" hidden><hr><p id="mq"></p><button id="d">Completed</button><button id="x">I quit</button></section>
+  <section id="m" hidden style="margin-top:0">
+    <hr><p id="mq"></p>
+    <div id="mb"><button id="d">Completed</button><button id="x">I quit</button></div>
+    <div id="ph" hidden><p>Add a photo to your private archive? (optional)</p><input id="f" type="file" accept="image/*"><br><button id="ps">Save</button><button id="pk">Skip</button></div>
+  </section>
+  <section>
+    <h3>Leaderboard</h3>
+    <button id="t1">All-time</button><button id="t2">This week</button>
+    <p id="lb"></p>
+  </section>
+  <details id="arch" hidden><summary>My archive</summary><div id="ar"></div></details>
 </main>
 <canvas id="c"></canvas>
 <script>
-let L = [], cur = '', t;
+const BOT = 'https://t.me/YOUR_BOT/YOUR_APP'; // replace after BotFather setup
+const tg = window.Telegram?.WebApp, A = tg?.initData || '';
+tg?.ready(); tg?.expand();
+let L = [], cur = '', t, B = {};
 const $ = id => document.getElementById(id);
 const R = () => String.fromCharCode(65 + Math.random() * 26 | 0);
+const api = (d, body) => fetch('/api/app?do=' + d, {
+  method: body ? 'POST' : 'GET',
+  headers: {authorization: 'tma ' + A, 'content-type': 'application/json'},
+  body: body && JSON.stringify(body)
+}).then(r => r.json()).then(j => { if (j.error) alert(j.error); return j; });
 
 function next() {
   const old = cur;
@@ -37,10 +62,59 @@ function next() {
   }, 30);
 }
 
-function set(s) {
-  s ? localStorage.q = s : localStorage.removeItem('q');
-  $('m').hidden = !s;
-  $('mq').textContent = s || '';
+function show(s) {
+  $('m').hidden = !s; $('mq').textContent = s || '';
+  $('mb').hidden = false; $('ph').hidden = true; $('f').value = '';
+}
+
+async function set(s) {
+  if (A) await api(s ? 'accept' : 'quit', {mission: s});
+  else s ? localStorage.q = s : localStorage.removeItem('q');
+  show(s);
+}
+
+async function finish(photo) {
+  if (A) await api('done', {photo}); else localStorage.removeItem('q');
+  show(); confetti(); next();
+  if (A) me();
+  board();
+}
+
+async function shrink(file) {
+  const b = await createImageBitmap(file);
+  for (let q = .8, w = 1280; ; q -= .15, w *= .85) {
+    const s = Math.min(1, w / Math.max(b.width, b.height)), c = document.createElement('canvas');
+    c.width = b.width * s; c.height = b.height * s;
+    c.getContext('2d').drawImage(b, 0, 0, c.width, c.height);
+    const d = c.toDataURL('image/jpeg', q);
+    if (d.length < 400e3 || q < .3) return d;
+  }
+}
+
+async function board() { B = await api('board'); tab('all'); }
+function tab(k) {
+  $('lb').textContent = (B[k] || []).map((e, i) => `${i + 1}. ${e.n} — ${e.s}`).join('\n') || 'No scores yet';
+}
+
+async function me() {
+  const m = await api('me');
+  show(m.mission);
+  const el = $('ar'); el.textContent = '';
+  (m.archive || []).forEach(e => {
+    const d = document.createElement('div'), p = document.createElement('p');
+    p.textContent = new Date(e.d).toLocaleDateString() + ' — ' + e.t; d.append(p);
+    if (e.p) {
+      const b = document.createElement('button'); b.textContent = 'View photo';
+      b.onclick = async () => {
+        const r = await fetch('/api/app?do=photo&p=' + encodeURIComponent(e.p), {headers: {authorization: 'tma ' + A}});
+        const i = new Image(); i.src = URL.createObjectURL(await r.blob()); i.style.maxWidth = '100%'; b.replaceWith(i);
+      };
+      d.append(b);
+    }
+    el.append(d);
+  });
+  if (!el.children.length) el.textContent = 'Nothing here yet. Complete a mission!';
+  $('arch').hidden = false;
 }
 
 function confetti() {
@@ -57,12 +131,17 @@ function confetti() {
 
 $('y').onclick = () => set(cur);
 $('n').onclick = next;
-$('d').onclick = () => { set(); confetti(); next(); };
-$('x').onclick = () => { set(); next(); };
+$('x').onclick = async () => { await set(); next(); };
+$('d').onclick = () => A ? ($('mb').hidden = true, $('ph').hidden = false) : finish();
+$('ps').onclick = async () => { const f = $('f').files[0]; finish(f && await shrink(f).catch(() => null)); };
+$('pk').onclick = () => finish();
+$('t1').onclick = () => tab('all');
+$('t2').onclick = () => tab('wk');
 
 fetch('lines.md').then(r => r.text()).then(s => {
   L = s.split('\n').map(l => l.trim()).filter(Boolean);
-  set(localStorage.q);
   L.length ? next() : $('q').textContent = 'Add missions to lines.md';
 });
+if (A) me(); else { show(localStorage.q); $('g').hidden = false; $('tl').href = BOT; }
+board();
 </script>
