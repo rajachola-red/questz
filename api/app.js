@@ -2,7 +2,11 @@ import crypto from 'node:crypto';
 import { Redis } from '@upstash/redis';
 import { put, get } from '@vercel/blob';
 
-const r = Redis.fromEnv();
+// Find the Redis REST settings under any name/prefix Vercel's integration may have used
+const E = process.env;
+const pick = re => Object.keys(E).find(k => re.test(k));
+const url = E[pick(/REST_(API_)?URL$/)], token = E[pick(/REST_(API_)?TOKEN$/)];
+const r = url && token ? new Redis({ url, token }) : null;
 const J = (d, s = 200) => Response.json(d, { status: s });
 const W = () => Math.floor((Date.now() / 864e5 + 3) / 7); // week number, Monday start
 
@@ -28,6 +32,7 @@ async function top(k) {
 }
 
 async function run(req) {
+  if (!r) return J({ error: 'Redis is not connected to this deployment. Connect Upstash Redis to the project, then redeploy.' }, 500);
   const u = new URL(req.url), d = u.searchParams.get('do');
   if (d === 'board') return J({ all: await top('lb'), wk: await top('wk:' + W()) });
 
