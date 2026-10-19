@@ -19,6 +19,7 @@ input{font:inherit;max-width:100%}
 </style>
 <h1>Edge Sidequest Generator</h1>
 <p id="g" hidden>Playing as guest. <a id="tl" href="#">Open in Telegram</a> to save your progress and join the leaderboard.</p>
+<p id="err" style="color:#c00"></p>
 <main>
   <h2>Find your mission</h2>
   <p id="q"></p>
@@ -37,17 +38,23 @@ input{font:inherit;max-width:100%}
 </main>
 <canvas id="c"></canvas>
 <script>
-const BOT = 'https://t.me/YOUR_BOT/YOUR_APP'; // replace after BotFather setup
+const BOT = 'https://t.me/edgesidequestz_bot/EdgeSideQuestz';
 const tg = window.Telegram?.WebApp, A = tg?.initData || '';
 tg?.ready(); tg?.expand();
 let L = [], cur = '', t, B = {};
 const $ = id => document.getElementById(id);
 const R = () => String.fromCharCode(65 + Math.random() * 26 | 0);
-const api = (d, body) => fetch('/api/app?do=' + d, {
-  method: body ? 'POST' : 'GET',
-  headers: {authorization: 'tma ' + A, 'content-type': 'application/json'},
-  body: body && JSON.stringify(body)
-}).then(r => r.json()).then(j => { if (j.error) alert(j.error); return j; });
+const api = (d, body) => {
+  $('err').textContent = '';
+  return fetch('/api/app?do=' + d, {
+    method: body ? 'POST' : 'GET',
+    headers: {authorization: 'tma ' + A, 'content-type': 'application/json'},
+    body: body && JSON.stringify(body)
+  }).then(r => r.text())
+    .then(x => { try { return JSON.parse(x); } catch { return {error: 'Server error: ' + x.slice(0, 150)}; } })
+    .catch(e => ({error: 'Network error: ' + e.message}))
+    .then(j => { if (j.error) $('err').textContent = j.error; return j; });
+};
 
 function next() {
   const old = cur;
@@ -68,13 +75,13 @@ function show(s) {
 }
 
 async function set(s) {
-  if (A) await api(s ? 'accept' : 'quit', {mission: s});
+  if (A) { if ((await api(s ? 'accept' : 'quit', {mission: s})).error) return; }
   else s ? localStorage.q = s : localStorage.removeItem('q');
   show(s);
 }
 
 async function finish(photo) {
-  if (A) await api('done', {photo}); else localStorage.removeItem('q');
+  if (A) { if ((await api('done', {photo})).error) { $('mb').hidden = false; $('ph').hidden = true; return; } } else localStorage.removeItem('q');
   show(); confetti(); next();
   if (A) me();
   board();
