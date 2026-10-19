@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edge Sidequest Generator</title>
+<style>
+body{font:18px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;background:#fff;color:#000;margin:0;padding:2rem 1rem;text-align:center;letter-spacing:.05em}
+h1{text-transform:uppercase;letter-spacing:.3em;font-size:1.2rem}
+main{max-width:640px;margin:15vh auto 0}
+button{font:inherit;background:none;border:1px solid #000;padding:.6em 1.2em;margin:.3em;cursor:pointer;text-transform:uppercase}
+button:hover{background:#000;color:#fff}
+hr{margin:3rem 0 2rem;border:0;border-top:1px solid #000}
+#c{position:fixed;inset:0;pointer-events:none}
+</style>
+<h1>Edge Sidequest Generator</h1>
+<main>
+  <h2>Find your mission</h2>
+  <p id="q"></p>
+  <div id="a" style="visibility:hidden"><button id="y">I accept</button><button id="n">Hit me again</button></div>
+  <section id="m" hidden><hr><p id="mq"></p><button id="d">Completed</button><button id="x">I quit</button></section>
+</main>
+<canvas id="c"></canvas>
+<script>
+let L = [], cur = '', t;
+const $ = id => document.getElementById(id);
+const R = () => String.fromCharCode(65 + Math.random() * 26 | 0);
+
+function next() {
+  const old = cur;
+  do cur = L[Math.random() * L.length | 0]; while (cur == old && L.length > 1);
+  $('a').style.visibility = 'hidden';
+  clearInterval(t);
+  let i = 0;
+  t = setInterval(() => {
+    $('q').textContent = [...cur].map((c, j) => j < i || c == ' ' ? c : R()).join('');
+    if (i >= cur.length) { clearInterval(t); $('a').style.visibility = 'visible'; }
+    i += 1.5;
+  }, 30);
+}
+
+function set(s) {
+  s ? localStorage.q = s : localStorage.removeItem('q');
+  $('m').hidden = !s;
+  $('mq').textContent = s || '';
+}
+
+function confetti() {
+  const c = $('c'), x = c.getContext('2d');
+  c.width = innerWidth; c.height = innerHeight;
+  const p = Array.from({length: 80}, () => ({x: c.width / 2, y: c.height / 2, vx: (Math.random() - .5) * 16, vy: Math.random() * -14 - 2, s: 4 + Math.random() * 5, h: Math.random() * 360}));
+  let f = 0;
+  (function a() {
+    x.clearRect(0, 0, c.width, c.height);
+    p.forEach(q => { q.x += q.vx; q.y += q.vy; q.vy += .4; x.fillStyle = `hsl(${q.h},90%,55%)`; x.fillRect(q.x, q.y, q.s, q.s); });
+    ++f < 90 ? requestAnimationFrame(a) : x.clearRect(0, 0, c.width, c.height);
+  })();
+}
+
+$('y').onclick = () => set(cur);
+$('n').onclick = next;
+$('d').onclick = () => { set(); confetti(); next(); };
+$('x').onclick = () => { set(); next(); };
+
+fetch('lines.md').then(r => r.text()).then(s => {
+  L = s.split('\n').map(l => l.trim()).filter(Boolean);
+  set(localStorage.q);
+  L.length ? next() : $('q').textContent = 'Add missions to lines.md';
+});
+</script>
